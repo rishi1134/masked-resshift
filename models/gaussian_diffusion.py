@@ -208,11 +208,11 @@ class GaussianDiffusion:
             mask = mask.float()
             mask = F.max_pool2d(mask, kernel_size=3, stride=1, padding=1)
             mask = F.avg_pool2d(mask, kernel_size=4, stride=4)
-            mask = self.smooth_mask(mask)
+            # mask = self.smooth_mask(mask)
             mask = mask.repeat(1, 3, 1, 1) # input is 3 channel
         
         return (
-            _extract_into_tensor(self.etas, t, x_start.shape) * (y - x_start) * mask + x_start
+            _extract_into_tensor(self.etas, t, x_start.shape) * (y - x_start) + x_start
             + _extract_into_tensor(self.sqrt_etas * self.kappa, t, x_start.shape) * noise * mask
         )
 
@@ -229,7 +229,6 @@ class GaussianDiffusion:
             _extract_into_tensor(self.posterior_mean_coef1, t, x_t.shape) * x_t
             + _extract_into_tensor(self.posterior_mean_coef2, t, x_t.shape) * x_start
         )
-        posterior_mean = posterior_mean * mask + x_t * (1.0 - mask)
         posterior_variance = _extract_into_tensor(self.posterior_variance, t, x_t.shape)
         posterior_log_variance_clipped = _extract_into_tensor(
             self.posterior_log_variance_clipped, t, x_t.shape
@@ -374,7 +373,7 @@ class GaussianDiffusion:
         nonzero_mask = (
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
-        sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise * mask.repeat(1, 3, 1, 1)
+        sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"])
         sample = (1.0 - mask).repeat(1, 3, 1, 1) * y + mask.repeat(1, 3, 1, 1) * sample
         return {"sample": sample, "pred_xstart": out["pred_xstart"], "mean":out["mean"]}
 
@@ -467,7 +466,7 @@ class GaussianDiffusion:
         mask = F.max_pool2d(mask, kernel_size=3, stride=1, padding=1)
         mask = F.avg_pool2d(mask, kernel_size=4, stride=4)
         mask = mask.clamp(0.0, 1.0)
-        mask = self.smooth_mask(mask)
+        # mask = self.smooth_mask(mask)
 
         z_sample = self.prior_sample(z_y, noise, mask)
 
@@ -637,12 +636,15 @@ class GaussianDiffusion:
     def smooth_mask(self, mask, sigma=2.0, kernel_size=5):
         b, c, h, w = mask.shape
         padding = (kernel_size - 1) // 2
+        # Create a Gaussian kernel
         x = th.arange(-padding, padding + 1, dtype=th.float32, device=mask.device)
         y = th.arange(-padding, padding + 1, dtype=th.float32, device=mask.device)
         xx, yy = th.meshgrid(x, y)
         kernel = th.exp(-(xx**2 + yy**2) / (2.0 * sigma**2))
         kernel = kernel / kernel.sum()
         kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(c, 1, 1, 1)
+
+        # Apply convolution (which acts as a blur)
         smoothed_mask = F.conv2d(mask, kernel, padding=padding, groups=c)
         return smoothed_mask
 
