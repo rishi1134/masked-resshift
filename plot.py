@@ -9,7 +9,7 @@ def moving_average(data, window_size):
 
     smoothed_data = []
     for i in range(len(data)):
-        start_index = max(0, i - window_size // 2)c:\Users\yash9\Documents\GitHub\ResShift\plot.py
+        start_index = max(0, i - window_size // 2)
         end_index = min(len(data), i + window_size // 2 + 1)
         smoothed_data.append(np.mean(data[start_index:end_index]))
 
